@@ -1,0 +1,241 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER MODEL (Clerk-based authentication)
+// ============================================
+model User {
+  id          String @id @default(uuid())
+  clerkUserId String @unique @map("clerk_user_id")
+
+  // Identity
+  username  String  @unique
+  email     String? @unique
+  firstName String? @map("first_name")
+  lastName  String? @map("last_name")
+
+  // Custom fields
+  pushToken String? @map("push_token")
+  status    String  @default("active")
+
+  // Soft delete
+  deletedAt DateTime? @map("deleted_at")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  ownedRides       Ride[]            @relation("RideOwner")
+  rideParticipants RideParticipant[]
+  locationUpdates  LocationUpdate[]
+  emergencyAlerts  EmergencyAlert[]
+  regroupPoints    RegroupPoint[]
+
+  @@index([clerkUserId])
+  @@index([username])
+  @@index([email])
+  @@map("users")
+}
+
+// ============================================
+// RIDE MODEL
+// ============================================
+enum RideStatus {
+  CREATED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model Ride {
+  id       String     @id @default(uuid())
+  rideCode String     @unique @map("ride_code")
+  ownerId  String     @map("owner_id")
+  status   RideStatus @default(CREATED)
+
+  // Route data
+  pickupLat     Decimal @map("pickup_lat") @db.Decimal(10, 8)
+  pickupLng     Decimal @map("pickup_lng") @db.Decimal(11, 8)
+  pickupAddress String? @map("pickup_address") @db.Text
+
+  destinationLat     Decimal @map("destination_lat") @db.Decimal(10, 8)
+  destinationLng     Decimal @map("destination_lng") @db.Decimal(11, 8)
+  destinationAddress String? @map("destination_address") @db.Text
+
+  rideName String? @db.VarChar(100)
+
+  // Google Maps response
+  routePolyline String? @map("route_polyline") @db.Text
+  routeDistance Int?    @map("route_distance")
+  routeDuration Int?    @map("route_duration")
+
+  // Timestamps
+  createdAt   DateTime  @default(now()) @map("created_at")
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+
+  // Statistics
+  actualDistance Int?     @map("actual_distance")
+  actualDuration Int?     @map("actual_duration")
+  avgSpeed       Decimal? @map("avg_speed") @db.Decimal(5, 2)
+  maxSpeed       Decimal? @map("max_speed") @db.Decimal(5, 2)
+
+  // Relations
+  owner           User              @relation("RideOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  participants    RideParticipant[]
+  locations       LocationUpdate[]
+  waypoints       Waypoint[]
+  regroupPoints   RegroupPoint[]
+  emergencyAlerts EmergencyAlert[]
+
+  @@index([rideCode])
+  @@index([ownerId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@map("rides")
+}
+
+// ============================================
+// RIDE PARTICIPANTS
+// ============================================
+enum ParticipantRole {
+  owner
+  participant
+}
+
+model RideParticipant {
+  rideId   String          @map("ride_id")
+  userId   String          @map("user_id")
+  role     ParticipantRole
+  joinedAt DateTime        @default(now()) @map("joined_at")
+  leftAt   DateTime?       @map("left_at")
+
+  ride Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([rideId, userId])
+  @@index([rideId])
+  @@index([userId])
+  @@map("ride_participants")
+}
+
+// ============================================
+// LOCATION UPDATES
+// ============================================
+model LocationUpdate {
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+  rideId String @map("ride_id")
+
+  latitude  Decimal  @db.Decimal(10, 8)
+  longitude Decimal  @db.Decimal(11, 8)
+  speed     Decimal? @db.Decimal(5, 2)
+  heading   Decimal? @db.Decimal(5, 2)
+  accuracy  Decimal? @db.Decimal(6, 2)
+
+  timestamp DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ride Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
+
+  @@index([rideId, timestamp(sort: Desc)])
+  @@index([userId, timestamp(sort: Desc)])
+  @@map("location_updates")
+}
+
+// ============================================
+// WAYPOINTS
+// ============================================
+model Waypoint {
+  id     String @id @default(uuid())
+  rideId String @map("ride_id")
+
+  latitude      Decimal @db.Decimal(10, 8)
+  longitude     Decimal @db.Decimal(11, 8)
+  name          String? @db.VarChar(100)
+  sequenceOrder Int     @map("sequence_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ride Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
+
+  @@index([rideId, sequenceOrder])
+  @@map("waypoints")
+}
+
+// ============================================
+// REGROUP POINTS
+// ============================================
+model RegroupPoint {
+  id     String @id @default(uuid())
+  rideId String @map("ride_id")
+
+  latitude  Decimal @db.Decimal(10, 8)
+  longitude Decimal @db.Decimal(11, 8)
+  name      String? @db.VarChar(100)
+
+  waitUntilAll Boolean @default(true) @map("wait_until_all")
+  waitDuration Int?    @map("wait_duration")
+
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  isActive    Boolean   @default(true) @map("is_active")
+  completedAt DateTime? @map("completed_at")
+  arrivedRiders Json?   @default("[]") @map("arrived_riders")
+
+  ride    Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  creator User @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([rideId, isActive])
+  @@map("regroup_points")
+}
+
+// ============================================
+// EMERGENCY ALERTS
+// ============================================
+enum AlertType {
+  SOS
+  BREAKDOWN
+  ACCIDENT
+  MEDICAL
+}
+
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model EmergencyAlert {
+  id     String @id @default(uuid())
+  rideId String @map("ride_id")
+  userId String @map("user_id")
+
+  alertType AlertType   @default(SOS) @map("alert_type")
+  status    AlertStatus @default(ACTIVE)
+  message   String?     @db.Text
+
+  latitude  Decimal @db.Decimal(10, 8)
+  longitude Decimal @db.Decimal(11, 8)
+
+  triggeredAt    DateTime  @default(now()) @map("triggered_at")
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  resolvedAt     DateTime? @map("resolved_at")
+  acknowledgedBy String?   @map("acknowledged_by")
+  resolvedBy     String?   @map("resolved_by")  
+
+  ride Ride @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([rideId, status])
+  @@index([userId])
+  @@map("emergency_alerts")
+}

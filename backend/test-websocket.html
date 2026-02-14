@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .connected { background: #d4edda; color: #155724; }
+        .disconnected { background: #f8d7da; color: #721c24; }
+        .log {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .section {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+    </style>
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>🏍️ Motorcycle Ride WebSocket Test</h1>
+    
+    <div class="section">
+        <h3>Connection</h3>
+        <div id="status" class="status disconnected">Disconnected</div>
+        <input type="text" id="token" placeholder="Bearer token" value="mock_user_test123" style="width: 300px">
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+    </div>
+
+    <div class="section">
+        <h3>Join Ride</h3>
+        <input type="text" id="rideId" placeholder="Ride ID" style="width: 300px">
+        <button onclick="joinRide()">Join Ride</button>
+        <button onclick="leaveRide()">Leave Ride</button>
+    </div>
+
+    <div class="section">
+        <h3>Send Location Update</h3>
+        <input type="number" id="lat" placeholder="Latitude" value="12.9716" step="0.0001">
+        <input type="number" id="lng" placeholder="Longitude" value="77.5946" step="0.0001">
+        <input type="number" id="speed" placeholder="Speed (m/s)" value="50">
+        <input type="number" id="heading" placeholder="Heading (0-360)" value="180">
+        <button onclick="sendLocation()">Send Location</button>
+    </div>
+
+    <div class="section">
+        <h3>Event Log</h3>
+        <button onclick="clearLog()">Clear Log</button>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        let socket = null;
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            const color = type === 'error' ? 'red' : type === 'success' ? 'green' : 'blue';
+            logDiv.innerHTML += `<div style="color: ${color}">[${time}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function connect() {
+            const token = document.getElementById('token').value;
+            
+            socket = io('http://localhost:3000', {
+                auth: {
+                    token: token
+                },
+                transports: ['websocket']
+            });
+
+            socket.on('connect', () => {
+                document.getElementById('status').className = 'status connected';
+                document.getElementById('status').textContent = 'Connected ✅';
+                log('Connected to WebSocket server', 'success');
+            });
+
+            socket.on('disconnect', () => {
+                document.getElementById('status').className = 'status disconnected';
+                document.getElementById('status').textContent = 'Disconnected ❌';
+                log('Disconnected from server', 'error');
+            });
+
+            socket.on('connected', (data) => {
+                log(`Server acknowledged: User ${data.username} (${data.userId})`, 'success');
+            });
+
+            socket.on('joinedRide', (data) => {
+                log(`✅ Joined ride: ${data.rideId}`, 'success');
+            });
+
+            socket.on('leftRide', (data) => {
+                log(`👋 Left ride: ${data.rideId}`, 'success');
+            });
+
+            socket.on('userJoined', (data) => {
+                log(`👤 ${data.username} joined the ride`, 'info');
+            });
+
+            socket.on('userLeft', (data) => {
+                log(`👋 ${data.username} left the ride`, 'info');
+            });
+
+            socket.on('riderLocation', (data) => {
+                log(`📍 ${data.username} @ ${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)} | Speed: ${data.speed} m/s`, 'info');
+            });
+
+            socket.on('locationUpdateAck', (data) => {
+                log('✅ Location update acknowledged', 'success');
+            });
+
+            socket.on('rideStarted', (data) => {
+                log(`🚀 Ride started by ${data.username}`, 'success');
+            });
+
+            socket.on('rideCompleted', (data) => {
+                log(`🏁 Ride completed! Duration: ${data.statistics.actualDuration}`, 'success');
+            });
+
+            socket.on('sosTriggered', (data) => {
+                log(`🚨 SOS ALERT from ${data.username}! Type: ${data.alertType}`, 'error');
+            });
+
+            socket.on('error', (data) => {
+                log(`❌ Error: ${data.message}`, 'error');
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+        }
+
+        function joinRide() {
+            const rideId = document.getElementById('rideId').value;
+            if (!socket || !rideId) {
+                log('❌ Connect first and enter Ride ID', 'error');
+                return;
+            }
+            socket.emit('joinRide', { rideId });
+            log(`📤 Sent: joinRide(${rideId})`, 'info');
+        }
+
+        function leaveRide() {
+            const rideId = document.getElementById('rideId').value;
+            if (!socket || !rideId) {
+                log('❌ Connect first and enter Ride ID', 'error');
+                return;
+            }
+            socket.emit('leaveRide', { rideId });
+            log(`📤 Sent: leaveRide(${rideId})`, 'info');
+        }
+
+        function sendLocation() {
+            const rideId = document.getElementById('rideId').value;
+            const lat = parseFloat(document.getElementById('lat').value);
+            const lng = parseFloat(document.getElementById('lng').value);
+            const speed = parseFloat(document.getElementById('speed').value);
+            const heading = parseFloat(document.getElementById('heading').value);
+
+            if (!socket || !rideId) {
+                log('❌ Connect first and enter Ride ID', 'error');
+                return;
+            }
+
+            socket.emit('locationUpdate', {
+                rideId,
+                latitude: lat,
+                longitude: lng,
+                speed,
+                heading,
+                timestamp: Date.now()
+            });
+
+            log(`📤 Sent location: ${lat.toFixed(4)}, ${lng.toFixed(4)}`, 'info');
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
+```
+
+---
+
+## **HOW TO USE THE TEST CLIENT:**
+
+1. **Save the file** as `test-websocket.html` in your `backend` folder
+2. **Open it in your browser** (double-click the file)
+3. **Steps to test:**
+
+### **Step 1: Create a Ride First (Postman)**
+```
+POST http://localhost:3000/api/rides
+Authorization: Bearer mock_user_test123
+Body: {
+  "pickup": {"lat": 12.9716, "lng": 77.5946},
+  "destination": {"lat": 13.0827, "lng": 80.2707}
+}
