@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-//import { GoogleMapsProvider } from './providers/google-maps.provider';
-import { OlaMapsProvider } from './providers/ola-maps.provider';  // ← ADD
+import { OlaMapsProvider, AutocompleteSuggestion } from './providers/ola-maps.provider';
 import { MapsProvider, Coordinates, RouteData, Place } from './interfaces/maps-provider.interface';
+
+export type { AutocompleteSuggestion };
+
 
 @Injectable()
 export class MapsService {
@@ -10,14 +12,12 @@ export class MapsService {
 
   constructor(
     private configService: ConfigService,
-    //private googleMapsProvider: GoogleMapsProvider,
-    private olaMapsProvider: OlaMapsProvider,  // ← ADD
+    private olaMapsProvider: OlaMapsProvider,
   ) {
     this.provider = this.olaMapsProvider;
     console.log('🗺️  Maps provider: Ola Maps');
   }
 
-  // Delegate to active provider
   async getRoute(
     origin: Coordinates,
     destination: Coordinates,
@@ -42,9 +42,16 @@ export class MapsService {
     return this.provider.searchNearby(location, type, radius);
   }
 
-  // Helper: Calculate distance between two coordinates (Haversine formula)
+  // ✅ NEW: Autocomplete
+  async autocomplete(
+    input: string,
+    location?: Coordinates,
+  ): Promise<AutocompleteSuggestion[]> {
+    return this.olaMapsProvider.autocomplete(input, location);
+  }
+
   calculateDistance(coord1: Coordinates, coord2: Coordinates): number {
-    const R = 6371e3; // Earth radius in meters
+    const R = 6371e3;
     const φ1 = (coord1.lat * Math.PI) / 180;
     const φ2 = (coord2.lat * Math.PI) / 180;
     const Δφ = ((coord2.lat - coord1.lat) * Math.PI) / 180;
@@ -55,25 +62,18 @@ export class MapsService {
       Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-    return R * c; // Distance in meters
+    return R * c;
   }
 
-  // Helper: Format distance for display
   formatDistance(meters: number): string {
-    if (meters < 1000) {
-      return `${Math.round(meters)} m`;
-    }
+    if (meters < 1000) return `${Math.round(meters)} m`;
     return `${(meters / 1000).toFixed(1)} km`;
   }
 
-  // Helper: Format duration for display
   formatDuration(seconds: number): string {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-
-    if (hours === 0) {
-      return `${minutes} min`;
-    }
+    if (hours === 0) return `${minutes} min`;
     return `${hours} hr ${minutes} min`;
   }
 }

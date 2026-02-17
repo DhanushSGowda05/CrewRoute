@@ -4,7 +4,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async update(userId: string, dto: UpdateUserDto) {
     // Check username uniqueness if changing username
@@ -39,4 +39,5 @@ export class UsersService {
       where: { username },
     });
   }
+
 }

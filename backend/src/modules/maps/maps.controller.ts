@@ -16,7 +16,6 @@ export class MapsController {
     const origin = { lat: parseFloat(originLat), lng: parseFloat(originLng) };
     const destination = { lat: parseFloat(destLat), lng: parseFloat(destLng) };
 
-    // Parse waypoints if provided
     let waypoints: { lat: number; lng: number }[] | undefined = undefined;
 
     if (waypointsStr) {
@@ -32,59 +31,56 @@ export class MapsController {
     }
 
     const route = await this.mapsService.getRoute(origin, destination, waypoints);
-
-    return {
-      origin,
-      destination,
-      waypoints,
-      route,
-    };
+    return { origin, destination, waypoints, route };
   }
 
   @Get('nearby')
   async searchNearby(@Query() dto: SearchPlacesDto) {
     const { lat, lng, type, radius } = dto;
-
     const location = { lat: parseFloat(lat), lng: parseFloat(lng) };
-    const searchRadius = radius ? parseInt(radius) : 5000; // Default 5km
-
+    const searchRadius = radius ? parseInt(radius) : 5000;
     const places = await this.mapsService.searchNearby(location, type, searchRadius);
-
-    return {
-      location,
-      type,
-      radius: searchRadius,
-      count: places.length,
-      places,
-    };
+    return { location, type, radius: searchRadius, count: places.length, places };
   }
 
   @Get('geocode')
   async geocode(@Query('address') address: string) {
-    if (!address) {
-      throw new BadRequestException('Address is required');
-    }
-
+    if (!address) throw new BadRequestException('Address is required');
     const coordinates = await this.mapsService.geocode(address);
-
-    return {
-      address,
-      coordinates,
-    };
+    return { address, coordinates };
   }
 
   @Get('reverse-geocode')
   async reverseGeocode(@Query('lat') lat: string, @Query('lng') lng: string) {
-    if (!lat || !lng) {
-      throw new BadRequestException('Both lat and lng are required');
-    }
-
+    if (!lat || !lng) throw new BadRequestException('Both lat and lng are required');
     const coordinates = { lat: parseFloat(lat), lng: parseFloat(lng) };
     const address = await this.mapsService.reverseGeocode(coordinates);
+    return { coordinates, address };
+  }
+
+  // ✅ NEW: Autocomplete
+  @Get('autocomplete')
+  async autocomplete(
+    @Query('input') input: string,
+    @Query('lat') lat?: string,
+    @Query('lng') lng?: string,
+  ) {
+    if (!input || input.trim().length < 2) {
+      throw new BadRequestException('Input must be at least 2 characters');
+    }
+
+    const location =
+      lat && lng
+        ? { lat: parseFloat(lat), lng: parseFloat(lng) }
+        : undefined;
+
+    const suggestions = await this.mapsService.autocomplete(input.trim(), location);
 
     return {
-      coordinates,
-      address,
+      input,
+      location,
+      count: suggestions.length,
+      suggestions,
     };
   }
 }

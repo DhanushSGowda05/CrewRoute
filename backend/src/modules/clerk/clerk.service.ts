@@ -129,10 +129,11 @@ export class ClerkService {
 
   // Get or create user (JIT sync for mock mode)
   async getOrCreateUser(clerkUserId: string): Promise<any> {
-    let user = await this.getUserByClerkId(clerkUserId);
+  let user = await this.getUserByClerkId(clerkUserId);
 
-    if (!user && this.mockMode) {
-      // Auto-create in mock mode
+  if (!user) {
+    if (this.mockMode) {
+      // Mock mode auto-create
       user = await this.prisma.user.create({
         data: {
           clerkUserId,
@@ -141,14 +142,28 @@ export class ClerkService {
       });
 
       console.log(`✅ Mock user auto-created: ${user.username}`);
-    }
+    } else {
+      try {
+        // 🔥 Real mode — fetch full Clerk user
+        const clerkUser = await this.clerkClient.users.getUser(clerkUserId);
 
-    if (!user) {
-      throw new UnauthorizedException('User not found. Please complete registration.');
-    }
+        user = await this.syncUserFromClerk(clerkUser);
 
-    return user;
+        console.log(`✅ Real Clerk user synced: ${user.username}`);
+      } catch (error: any) {
+        // 🔥 Handle race condition (unique constraint)
+        if (error.code === 'P2002') {
+          user = await this.getUserByClerkId(clerkUserId);
+        } else {
+          throw error;
+        }
+      }
+    }
   }
+
+  return user;
+}
+
 
   // Soft delete user
   async softDeleteUser(clerkUserId: string): Promise<void> {

@@ -2,6 +2,14 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MapsProvider, Coordinates, RouteData, Place } from '../interfaces/maps-provider.interface';
 
+export interface AutocompleteSuggestion {
+  placeId: string;
+  name: string;
+  description: string;
+  lat: number | null;
+  lng: number | null;
+}
+
 @Injectable()
 export class OlaMapsProvider implements MapsProvider {
   private apiKey: string;
@@ -41,14 +49,10 @@ export class OlaMapsProvider implements MapsProvider {
       if (!response.ok) {
         const errorBody = await response.text();
         console.error('Ola Directions Error:', errorBody);
-        throw new HttpException(
-          'Ola Maps Directions API error',
-          HttpStatus.BAD_GATEWAY,
-        );
+        throw new HttpException('Ola Maps Directions API error', HttpStatus.BAD_GATEWAY);
       }
 
       const data = await response.json();
-
       const route = data.routes?.[0];
       const leg = route?.legs?.[0];
 
@@ -65,10 +69,7 @@ export class OlaMapsProvider implements MapsProvider {
       };
     } catch (error) {
       console.error('Ola Maps getRoute error:', error);
-      throw new HttpException(
-        'Failed to get route from Ola Maps',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw new HttpException('Failed to get route from Ola Maps', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -77,23 +78,17 @@ export class OlaMapsProvider implements MapsProvider {
   // ==========================
   async geocode(address: string): Promise<Coordinates> {
     try {
-      const url = `${this.baseUrl}/places/v1/geocode?address=${encodeURIComponent(
-        address,
-      )}&api_key=${this.apiKey}`;
+      const url = `${this.baseUrl}/places/v1/geocode?address=${encodeURIComponent(address)}&api_key=${this.apiKey}`;
 
       const response = await fetch(url);
 
       if (!response.ok) {
         const errorBody = await response.text();
         console.error('Ola Geocode Error:', errorBody);
-        throw new HttpException(
-          'Ola Maps geocoding error',
-          HttpStatus.BAD_GATEWAY,
-        );
+        throw new HttpException('Ola Maps geocoding error', HttpStatus.BAD_GATEWAY);
       }
 
       const data = await response.json();
-
       const result = data.geocodingResults?.[0];
 
       if (!result) {
@@ -106,13 +101,9 @@ export class OlaMapsProvider implements MapsProvider {
       };
     } catch (error) {
       console.error('Ola Maps geocode error:', error);
-      throw new HttpException(
-        'Failed to geocode address',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw new HttpException('Failed to geocode address', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
-
 
   // ==========================
   // REVERSE GEOCODE
@@ -126,14 +117,10 @@ export class OlaMapsProvider implements MapsProvider {
       if (!response.ok) {
         const errorBody = await response.text();
         console.error('Ola Reverse Geocode Error:', errorBody);
-        throw new HttpException(
-          'Ola Maps reverse geocoding error',
-          HttpStatus.BAD_GATEWAY,
-        );
+        throw new HttpException('Ola Maps reverse geocoding error', HttpStatus.BAD_GATEWAY);
       }
 
       const data = await response.json();
-
       const result = data.results?.[0];
 
       if (!result) {
@@ -143,22 +130,14 @@ export class OlaMapsProvider implements MapsProvider {
       return result.formatted_address;
     } catch (error) {
       console.error('Ola Maps reverseGeocode error:', error);
-      throw new HttpException(
-        'Failed to reverse geocode',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw new HttpException('Failed to reverse geocode', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
-
 
   // ==========================
   // NEARBY SEARCH
   // ==========================
-  async searchNearby(
-    location: Coordinates,
-    type: string,
-    radius: number,
-  ): Promise<Place[]> {
+  async searchNearby(location: Coordinates, type: string, radius: number): Promise<Place[]> {
     try {
       const url = `${this.baseUrl}/places/v1/nearbysearch?location=${location.lat},${location.lng}&types=${type}&radius=${radius}&api_key=${this.apiKey}`;
 
@@ -167,34 +146,74 @@ export class OlaMapsProvider implements MapsProvider {
       if (!response.ok) {
         const errorBody = await response.text();
         console.error('Ola Nearby Error:', errorBody);
-        throw new HttpException(
-          'Ola Maps nearby search error',
-          HttpStatus.BAD_GATEWAY,
-        );
+        throw new HttpException('Ola Maps nearby search error', HttpStatus.BAD_GATEWAY);
       }
 
       const data = await response.json();
-
       const places = data.predictions;
 
-      if (!places || places.length === 0) {
-        return [];
-      }
+      if (!places || places.length === 0) return [];
 
       return places.map((place: any) => ({
         id: place.place_id,
         name: place.structured_formatting?.main_text || place.description,
-        location: {
-          lat: null,
-          lng: null,
-        },
-        address:
-          place.structured_formatting?.secondary_text || place.description,
+        location: { lat: null, lng: null },
+        address: place.structured_formatting?.secondary_text || place.description,
         rating: undefined,
         types: place.types,
       }));
     } catch (error) {
       console.error('Ola Maps searchNearby error:', error);
+      return [];
+    }
+  }
+
+  // ==========================
+  // ✅ NEW: AUTOCOMPLETE
+  // ==========================
+  async autocomplete(
+    input: string,
+    location?: Coordinates,
+  ): Promise<AutocompleteSuggestion[]> {
+    try {
+      // Build URL - add location bias if provided
+      const locationParam = location
+        ? `&location=${location.lat},${location.lng}`
+        : '';
+
+      const url = `${this.baseUrl}/places/v1/autocomplete?input=${encodeURIComponent(input)}${locationParam}&api_key=${this.apiKey}`;
+
+      const response = await fetch(url, {
+        headers: {
+          'X-Request-Id': `crewroute-${Date.now()}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        console.error('Ola Autocomplete Error:', errorBody);
+        throw new HttpException('Ola Maps autocomplete error', HttpStatus.BAD_GATEWAY);
+      }
+
+      const data = await response.json();
+
+      // Ola returns predictions array
+      const predictions = data.predictions;
+
+      if (!predictions || predictions.length === 0) return [];
+
+      return predictions.map((prediction: any) => ({
+        placeId: prediction.place_id || prediction.reference || '',
+        name: prediction.structured_formatting?.main_text || prediction.description || '',
+        description: prediction.description || '',
+        // Coordinates may not be in autocomplete response
+        // User will select and we use geocode/place_id to get exact coords
+        lat: prediction.geometry?.location?.lat ?? null,
+        lng: prediction.geometry?.location?.lng ?? null,
+      }));
+    } catch (error) {
+      console.error('Ola Maps autocomplete error:', error);
+      // Return empty instead of throwing - autocomplete should fail silently
       return [];
     }
   }
@@ -210,7 +229,6 @@ export class OlaMapsProvider implements MapsProvider {
   private formatDuration(seconds: number): string {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-
     if (hours === 0) return `${minutes} min`;
     return `${hours} hr ${minutes} min`;
   }

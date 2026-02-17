@@ -17,7 +17,7 @@ import { JoinRideDto } from './dto/join-ride.dto';
 @Controller('rides')
 @UseGuards(ClerkAuthGuard)
 export class RidesController {
-  constructor(private ridesService: RidesService) {}
+  constructor(private ridesService: RidesService) { }
 
   /**
    * Create a new ride
@@ -51,7 +51,13 @@ export class RidesController {
    * GET /api/rides?status=ACTIVE
    */
   @Get()
-  async listMyRides(@CurrentUser('id') userId: string, @Query('status') status?: string) {
+  async listMyRides(
+    @CurrentUser('id') userId: string,
+    @Query('status') status?: string,
+  ) {
+    console.log("🚀 /api/rides HIT by user:", userId);
+    console.log("🔎 Status filter:", status);
+
     return this.ridesService.listMyRides(userId, status);
   }
 

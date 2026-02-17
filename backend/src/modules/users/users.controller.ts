@@ -7,12 +7,15 @@ import { UpdateUserDto } from './dto/update-user.dto';
 @Controller('users')
 @UseGuards(ClerkAuthGuard)
 export class UsersController {
-  constructor(private usersService: UsersService) {}
+  constructor(private usersService: UsersService) { }
 
   @Get('me')
   async getProfile(@CurrentUser() user: any) {
-    return user;
+    return { user };
   }
+
+
+
 
   @Patch('me')
   async updateProfile(@CurrentUser() user: any, @Body() dto: UpdateUserDto) {

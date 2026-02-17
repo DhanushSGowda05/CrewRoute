@@ -19,6 +19,7 @@ async function bootstrap() {
       transform: true,
     }),
   );
+  
   // Global exception filter
   app.useGlobalFilters(new HttpExceptionFilter());
 
@@ -31,7 +32,8 @@ async function bootstrap() {
   // Global prefix
   app.setGlobalPrefix('api');
 
-  await app.listen(port);
+  // CHANGE THIS LINE - ADD '0.0.0.0' ⬇️
+  await app.listen(port, '0.0.0.0');
 
   console.log(`
     ╔══════════════════════════════════════════╗
@@ -40,6 +42,7 @@ async function bootstrap() {
     ║  Environment: ${configService.get('NODE_ENV')}           ║
     ║  Port: ${port}                              ║
     ║  API: http://localhost:${port}/api          ║
+    ║  Network: http://10.187.53.150:${port}/api  ║
     ║  Clerk Mock: ${configService.get('CLERK_MOCK_MODE')}                ║
     ╚══════════════════════════════════════════╝
   `);
