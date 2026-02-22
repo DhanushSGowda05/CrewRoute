@@ -618,13 +618,23 @@ export class RidesService {
       status: ride.status,
       isOwner: ride.ownerId === userId,
       participantCount: ride.participants.length,
-      route: {
-        distance: this.mapsService.formatDistance(ride.routeDistance || 0),
-        duration: this.mapsService.formatDuration(ride.routeDuration || 0),
-      },
+
+      // 🔥 ADD THESE
+      pickupLat: ride.pickupLat,
+      pickupLng: ride.pickupLng,
+      pickupAddress: ride.pickupAddress,
+
+      destinationLat: ride.destinationLat,
+      destinationLng: ride.destinationLng,
+      destinationAddress: ride.destinationAddress,
+
+      routeDistance: ride.routeDistance,
+      routeDuration: ride.routeDuration,
+
       createdAt: ride.createdAt,
       startedAt: ride.startedAt,
       completedAt: ride.completedAt,
     }));
+
   }
 }

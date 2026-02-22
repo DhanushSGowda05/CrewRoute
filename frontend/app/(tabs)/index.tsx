@@ -194,19 +194,24 @@ function RideCard({ ride }: { ride: Ride }) {
       </View>
 
       <View style={styles.rideCardBody}>
-        <Text style={styles.rideCardInfo}>
-          Code: {ride.rideCode}
-        </Text>
+        <View>
+          <Text style={styles.rideCardInfo} numberOfLines={1} ellipsizeMode="tail">
+            📍 {ride.pickupAddress?.split(',')[0] || 'Start'}
+          </Text>
+          <Text style={styles.rideCardInfo} numberOfLines={1} ellipsizeMode="tail">
+            🚩 {ride.destinationAddress?.split(',')[0] || 'End'}
+          </Text>
+        </View>
+
 
         <View style={styles.rideCardStats}>
           <Text style={styles.rideCardStat}>
-            {ride.route.distance}
+            {ride.routeDistance ? Math.round(ride.routeDistance / 1000) : 0} km
           </Text>
           <Text style={styles.rideCardStat}>·</Text>
           <Text style={styles.rideCardStat}>
-            {ride.route.duration}
+            {ride.routeDuration ? Math.round(ride.routeDuration / 60) : 0} min
           </Text>
-
         </View>
       </View>
 

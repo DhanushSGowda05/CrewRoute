@@ -31,8 +31,8 @@ function InitialLayout() {
   const segments = useSegments();
   const router = useRouter();
 
-  // ✅ Use individual setters — syncUserWithBackend no longer exists in store
-  const { setToken, setUser, logout } = useAuthStore();
+  // ✅ Use all setters from store
+  const { setToken, setUser, setGetFreshToken, logout } = useAuthStore();
 
   // Navigation guard
   useEffect(() => {
@@ -45,7 +45,7 @@ function InitialLayout() {
     }
   }, [isSignedIn, segments, isLoaded]);
 
-  // ✅ Sync logic moved here — no more circular dependency
+  // ✅ Sync logic with getFreshToken storage
   useEffect(() => {
     const syncAuth = async () => {
       if (isSignedIn) {
@@ -53,7 +53,10 @@ function InitialLayout() {
           const token = await getToken();
           if (token) {
             console.log('🔑 Got Clerk token, syncing with backend...');
-            setToken(token); // store token in-memory
+            setToken(token);
+
+            // ✅ Store the getToken function for WebSocket use
+            setGetFreshToken(getToken);
 
             // Fetch user from backend and store in authStore
             const response = await usersService.getCurrentUser();

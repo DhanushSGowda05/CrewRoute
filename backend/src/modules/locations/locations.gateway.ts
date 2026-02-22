@@ -30,7 +30,7 @@ export class LocationsGateway implements OnGatewayConnection, OnGatewayDisconnec
     private locationsService: LocationsService,
     private redis: RedisService,
     private prisma: PrismaService,
-  ) {}
+  ) { }
 
   /**
    * Handle new WebSocket connection
@@ -79,7 +79,7 @@ export class LocationsGateway implements OnGatewayConnection, OnGatewayDisconnec
         socketId: client.id,
       });
     } catch (error) {
-      let errormessage= error instanceof Error ? error.message : 'Unknown error';
+      let errormessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('WebSocket connection error:', errormessage);
       client.disconnect();
     }
@@ -133,24 +133,47 @@ export class LocationsGateway implements OnGatewayConnection, OnGatewayDisconnec
 
       console.log(`📍 ${username} joined ride room: ${rideId}`);
 
-      // Notify others in the room
-      client.to(rideId).emit('userJoined', {
+      // Get all current participants to send to the new joiner
+      const allParticipants = await this.prisma.rideParticipant.findMany({
+        where: {
+          rideId,
+          leftAt: null,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+            },
+          },
+        },
+      });
+
+      // Send current participants list to the new joiner
+      client.emit('joinedRide', {
+        rideId,
+        message: 'Successfully joined ride',
+        participants: allParticipants.map(p => ({
+          userId: p.user.id,
+          username: p.user.username,
+          joinedAt: p.joinedAt.toISOString(),
+        })),
+      });
+
+      // Notify EVERYONE in the room (including sender) about the new joiner
+      this.server.to(rideId).emit('userJoined', {
         userId,
         username,
         joinedAt: new Date().toISOString(),
       });
 
-      // Send acknowledgment
-      client.emit('joinedRide', {
-        rideId,
-        message: 'Successfully joined ride',
-      });
     } catch (error) {
-      let errormessage= error instanceof Error ? error.message : 'Unknown error';
+      let errormessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error joining ride:', errormessage);
       client.emit('error', { message: 'Failed to join ride' });
     }
   }
+
 
   /**
    * Leave a ride room
@@ -214,7 +237,7 @@ export class LocationsGateway implements OnGatewayConnection, OnGatewayDisconnec
         timestamp: locationData.timestamp,
       });
     } catch (error) {
-      let errormessage= error instanceof Error ? error.message : 'Unknown error';
+      let errormessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Location update error:', errormessage);
       client.emit('error', { message: errormessage });
     }
@@ -272,7 +295,7 @@ export class LocationsGateway implements OnGatewayConnection, OnGatewayDisconnec
   async forceLeaveRoom(userId: string, rideId: string) {
     // Get all socket connections for this user
     const socketIds = await this.redis.getUserSockets(userId);
-    
+
     if (socketIds.length === 0) {
       console.log(`⚠️  No active WebSocket connections for user ${userId}`);
       return;
@@ -281,17 +304,17 @@ export class LocationsGateway implements OnGatewayConnection, OnGatewayDisconnec
     // Force each socket to leave the room
     for (const socketId of socketIds) {
       const socket = this.server.sockets.sockets.get(socketId);
-      
+
       if (socket) {
         // Leave the room
         socket.leave(rideId);
-        
+
         // Notify the client they were removed
         socket.emit('forcedLeaveRide', {
           rideId,
           reason: 'You have left this ride',
         });
-        
+
         console.log(`🚪 Forced socket ${socketId} to leave ride ${rideId}`);
       }
     }

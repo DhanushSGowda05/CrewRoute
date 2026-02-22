@@ -2,6 +2,9 @@ import { io, Socket } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_CONFIG } from '../config/api.config';
 import { CONSTANTS } from '../config/constants';
+import { useAuthStore } from '../stores';
+
+const WS_URL = API_CONFIG.WS_URL;
 import {
   LocationUpdate,
   RiderLocation,
@@ -20,31 +23,85 @@ class SocketService {
   /**
    * Connect to WebSocket server
    */
-  async connect() {
-    try {
-      const token = await AsyncStorage.getItem(CONSTANTS.CACHE_KEYS.TOKEN);
-      
-      if (!token) {
-        console.error('No token found for WebSocket connection');
-        return;
-      }
-
-      this.socket = io(API_CONFIG.WS_URL, {
-        auth: {
-          token: token.replace('Bearer ', ''),
-        },
-        transports: ['websocket'],
-        reconnection: true,
-        reconnectionDelay: CONSTANTS.WS_RECONNECT_DELAY || 3000,
-        reconnectionAttempts: CONSTANTS.WS_MAX_RECONNECT_ATTEMPTS || 5,
-      });
-
-      this.setupEventListeners();
-      
-      console.log('WebSocket connecting...');
-    } catch (error) {
-      console.error('WebSocket connection error:', error);
+  async connect(): Promise<void> {
+    if (this.socket?.connected) {
+      console.log('✅ Socket already connected');
+      return;
     }
+
+    // ✅ Get token using the stored getFreshToken function
+    const { token, getFreshToken } = useAuthStore.getState();
+
+    let authToken = token;
+
+    // Try to get fresh token from Clerk
+    if (getFreshToken) {
+      try {
+        const freshToken = await getFreshToken();
+        if (freshToken) {
+          authToken = freshToken;
+          console.log('🔄 Got fresh token for WebSocket');
+        }
+      } catch (err) {
+        console.warn('⚠️ Could not get fresh token, using stored token');
+      }
+    }
+
+    if (!authToken) {
+      console.error('❌ No token found for WebSocket connection');
+      return;
+    }
+
+    console.log('🔌 Connecting to WebSocket...');
+    console.log('Token:', authToken.substring(0, 20) + '...');
+
+    this.socket = io(WS_URL, {
+      auth: {
+        token: authToken,
+      },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+    });
+
+    // ✅ Refresh token on reconnect attempts
+    this.socket.io.on('reconnect_attempt', async () => {
+      console.log('🔄 Reconnecting WebSocket with fresh token...');
+      const { getFreshToken } = useAuthStore.getState();
+      if (getFreshToken) {
+        try {
+          const freshToken = await getFreshToken();
+          if (freshToken && this.socket) {
+            this.socket.auth = { token: freshToken };
+          }
+        } catch (err) {
+          console.warn('Could not refresh token for reconnect');
+        }
+      }
+    });
+
+    this.socket.on('connect', () => {
+      console.log('✅ WebSocket connected:', this.socket?.id);
+    });
+
+    this.socket.on('connect_error', (error) => {
+      console.error('❌ WebSocket connection error:', error.message);
+    });
+
+    this.socket.on('disconnect', (reason) => {
+      console.log('❌ WebSocket disconnected:', reason);
+
+      // Auto-reconnect if session expired
+      if (reason === 'io server disconnect' || reason === 'transport close') {
+        console.log('🔄 Attempting to reconnect...');
+        setTimeout(() => this.connect(), 1000);
+      }
+    });
+
+    this.socket.on('error', (error) => {
+      console.error('❌ WebSocket error:', error);
+    });
   }
 
   /**

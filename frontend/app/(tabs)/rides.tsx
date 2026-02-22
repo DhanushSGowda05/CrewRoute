@@ -24,10 +24,10 @@ export default function RidesScreen() {
   const [filter, setFilter] = useState<'all' | 'completed' | 'active'>('all');
 
   useEffect(() => {
-  if (token && isAuthenticated) {
-    loadRides();
-  }
-}, [filter,token, isAuthenticated]);
+    if (token && isAuthenticated) {
+      loadRides();
+    }
+  }, [filter, token, isAuthenticated]);
 
 
   const loadRides = async () => {
@@ -48,6 +48,7 @@ export default function RidesScreen() {
       setIsLoading(false);
     }
   };
+
 
 
   const handleRefresh = async () => {
@@ -217,14 +218,20 @@ function RideCard({ ride, onPress }: { ride: Ride; onPress: () => void }) {
         <View style={styles.locationRow}>
           <Text style={styles.locationIcon}>📍</Text>
           <Text style={styles.locationText} numberOfLines={1}>
-            {ride.pickup.address || 'Unknown location'}
+            {ride.pickupAddress
+              ? ride.pickupAddress.split(',')[0]
+              : `${ride.pickupLat?.toFixed(4)}, ${ride.pickupLng?.toFixed(4)}`}
           </Text>
+
         </View>
         <View style={styles.locationRow}>
           <Text style={styles.locationIcon}>🚩</Text>
           <Text style={styles.locationText} numberOfLines={1}>
-            {ride.destination.address || 'Unknown location'}
+            {ride.destinationAddress
+              ? ride.destinationAddress.split(',')[0]
+              : `${ride.destinationLat?.toFixed(4)}, ${ride.destinationLng?.toFixed(4)}`}
           </Text>
+
         </View>
       </View>
 
@@ -232,16 +239,17 @@ function RideCard({ ride, onPress }: { ride: Ride; onPress: () => void }) {
         <View style={styles.statItem}>
           <Text style={styles.statIcon}>📏</Text>
           <Text style={styles.statText}>
-            {Math.round(ride.route.distance / 1000)} km
+            {ride.routeDistance ? Math.round(ride.routeDistance / 1000) : 0} km
           </Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text style={styles.statIcon}>⏱️</Text>
           <Text style={styles.statText}>
-            {Math.round(ride.route.duration / 60)} min
+            {ride.routeDuration ? Math.round(ride.routeDuration / 60) : 0} min
           </Text>
         </View>
+
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
           <Text style={styles.statIcon}>📅</Text>
@@ -405,6 +413,7 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSizes.md,
     color: colors.textSecondary,
     flex: 1,
+    marginLeft: 8,
   },
   rideCardStats: {
     flexDirection: 'row',

@@ -1,15 +1,20 @@
 import { apiService } from './base.service';
-import { Ride, CreateRideDto, JoinRideDto } from '../../types';
+import { Ride } from '../../types';
 
 class RidesService {
   // Create ride
-  async createRide(data: CreateRideDto): Promise<{ ride: Ride }> {
+  async createRide(data: {
+    pickup: { lat: number; lng: number; address: string };
+    destination: { lat: number; lng: number; address: string };
+    rideName?: string;
+    waypoints?: Array<{ lat: number; lng: number }>;
+  }): Promise<{ ride: Ride }> {
     return apiService.post('/rides', data);
   }
 
-  // Join ride
-  async joinRide(data: JoinRideDto): Promise<{ ride: Ride; participants: any[] }> {
-    return apiService.post('/rides/join', data);
+  // Join ride - SIMPLE STRING PARAMETER
+  async joinRide(rideCode: string): Promise<{ ride: Ride }> {
+    return apiService.post('/rides/join', { rideCode });
   }
 
   // Get ride details
@@ -17,10 +22,12 @@ class RidesService {
     return apiService.get(`/rides/${rideId}`);
   }
 
-  // List my rides
-  async listMyRides(status?: string): Promise<Ride[]> {
-    return apiService.get('/rides', { status });
-  }
+  
+ // List my rides
+async listMyRides(status?: string): Promise<Ride[]> {
+  const response = await apiService.get<{ rides: Ride[] }>('/rides', { status });
+  return response.rides; // ✅ Return the array, not the object
+}
 
 
   // Start ride
